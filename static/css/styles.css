@@ -1,0 +1,342 @@
+/* GreenPrint UI — all styles external (CSP: no unsafe-inline). */
+:root {
+  --bg: hsl(120, 20%, 96%);
+  --bg-grad: hsl(120, 15%, 92%);
+  --surface: hsl(120, 20%, 100%);
+  --surface-glass: hsla(120, 20%, 100%, 0.85);
+  --ink: hsl(120, 30%, 12%);
+  --ink-muted: hsl(120, 15%, 35%);
+  --accent: hsl(120, 45%, 28%);
+  --accent-hover: hsl(120, 45%, 22%);
+  --accent-ink: hsl(120, 20%, 100%);
+  --warn: hsl(25, 100%, 35%);
+  --border: hsl(120, 20%, 82%);
+  --border-focus: hsl(120, 45%, 35%);
+  --shadow: hsla(120, 30%, 15%, 0.08);
+  --chip-bg: hsl(120, 15%, 90%);
+  --chip-hover: hsl(120, 15%, 85%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: hsl(120, 25%, 8%);
+    --bg-grad: hsl(120, 20%, 5%);
+    --surface: hsl(120, 20%, 13%);
+    --surface-glass: hsla(120, 20%, 13%, 0.82);
+    --ink: hsl(120, 20%, 94%);
+    --ink-muted: hsl(120, 15%, 75%);
+    --accent: hsl(120, 45%, 52%);
+    --accent-hover: hsl(120, 45%, 58%);
+    --accent-ink: hsl(120, 30%, 6%);
+    --warn: hsl(25, 95%, 65%);
+    --border: hsl(120, 15%, 22%);
+    --border-focus: hsl(120, 45%, 52%);
+    --shadow: hsla(0, 0%, 0%, 0.4);
+    --chip-bg: hsl(120, 15%, 18%);
+    --chip-hover: hsl(120, 15%, 24%);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  background: var(--bg);
+  background: linear-gradient(135deg, var(--bg), var(--bg-grad));
+  color: var(--ink);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 0.6rem 1.2rem;
+  z-index: 100;
+  font-weight: 700;
+  border-radius: 0 0 8px 0;
+  text-decoration: none;
+  transition: top 0.1s ease;
+}
+
+.skip-link:focus {
+  left: 0;
+  top: 0;
+}
+
+header, nav, main, footer {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+}
+
+header {
+  text-align: center;
+  padding-top: 2.5rem;
+  padding-bottom: 1.5rem;
+}
+
+header h1 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 2.8rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--accent), var(--warn));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.tagline {
+  margin: 0.5rem 0 0;
+  font-size: 1.15rem;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+nav {
+  margin-bottom: 1.5rem;
+}
+
+nav ul {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+nav a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.05rem;
+  padding: 0.25rem 0.5rem;
+  transition: color 0.2s ease, border-bottom 0.2s ease;
+  border-bottom: 2px solid transparent;
+}
+
+nav a:hover, nav a:focus {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+section {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.75rem 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 10px 30px var(--shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  section {
+    background-color: var(--surface-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+@media (hover: hover) {
+  section:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 35px var(--shadow);
+  }
+}
+
+section h2 {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  color: var(--accent);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.field {
+  margin-bottom: 1.25rem;
+}
+
+label, legend {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  margin: 0.35rem 0 0;
+}
+
+textarea, input[type="text"], select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+textarea:focus, input[type="text"]:focus, select:focus {
+  border-color: var(--border-focus);
+  outline: none;
+}
+
+button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 10px;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+button:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 6px 16px var(--shadow);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.quick-add {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+#chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.chip {
+  background: var(--chip-bg);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  box-shadow: none;
+}
+
+.chip:hover, .chip:focus {
+  background: var(--chip-hover);
+  border-color: var(--border-focus);
+}
+
+.results {
+  margin-top: 1rem;
+}
+
+.estimate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.estimate-row span {
+  font-size: 0.95rem;
+}
+
+.estimate-row span:first-child {
+  font-weight: 500;
+}
+
+.estimate-row span:last-child {
+  font-weight: 700;
+}
+
+.total-row {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-top: 1.25rem;
+  margin-bottom: 1rem;
+  color: var(--accent);
+  border-top: 2px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.eco-tip {
+  background: var(--chip-bg);
+  border-left: 4px solid var(--accent);
+  padding: 0.8rem 1.2rem;
+  border-radius: 0 8px 8px 0;
+  margin-top: 1.25rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.score-badge {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.over-baseline {
+  color: var(--warn);
+}
+
+footer {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--border);
+  margin-top: 3rem;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  button, .chip {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+  }
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
+}

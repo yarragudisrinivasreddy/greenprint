@@ -1,0 +1,12 @@
+flask>=3.0
+flask-limiter>=3.5
+gunicorn>=21.2
+google-cloud-aiplatform>=1.60
+google-cloud-translate>=3.15
+google-cloud-firestore>=2.16
+google-cloud-storage>=2.16
+google-cloud-secret-manager>=2.20
+google-cloud-language>=2.13
+pytest>=8.0
+pytest-cov>=5.0
+pytest-mock>=3.14

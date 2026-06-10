@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GreenPrint — understand, track and reduce your carbon footprint with personalized insights.">
+  <title>GreenPrint — Carbon Footprint Awareness</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <header role="banner">
+    <h1>GreenPrint</h1>
+    <p class="tagline">Understand your footprint. Shrink it with one action a day.</p>
+  </header>
+
+  <nav role="navigation" aria-label="Primary navigation">
+    <ul>
+      <li><a href="#track-section">Track</a></li>
+      <li><a href="#insights-section">Insights</a></li>
+      <li><a href="#simulate-section">What-if</a></li>
+    </ul>
+  </nav>
+
+  <main id="main-content" role="main" aria-label="Carbon tracking workspace">
+
+    <section id="track-section" aria-labelledby="track-heading">
+      <h2 id="track-heading">Track your day</h2>
+
+      <div class="field">
+        <label for="language-select">Response language</label>
+        <select id="language-select" aria-required="false">
+          <option value="en" selected>English</option>
+          <option value="hi">हिन्दी (Hindi)</option>
+          <option value="te">తెలుగు (Telugu)</option>
+          <option value="ta">தமிழ் (Tamil)</option>
+          <option value="kn">ಕನ್ನಡ (Kannada)</option>
+          <option value="bn">বাংলা (Bengali)</option>
+          <option value="mr">मराठी (Marathi)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="activity-text">Describe your activities</label>
+        <textarea id="activity-text" rows="3" aria-describedby="activity-hint"
+          placeholder="e.g. Drove 12 km to office, had chicken biryani, ran the AC for 6 hours"></textarea>
+        <p id="activity-hint" class="hint">Plain language works — any supported language.</p>
+      </div>
+
+      <fieldset class="quick-add" aria-describedby="quickadd-hint">
+        <legend>Quick add</legend>
+        <p id="quickadd-hint" class="hint">Tap to add a typical activity instantly.</p>
+        <div id="chip-row" role="group" aria-label="Quick add activity buttons"></div>
+      </fieldset>
+
+      <button id="track-btn" type="button" aria-label="Estimate carbon footprint" aria-describedby="activity-hint">
+        Estimate my footprint
+      </button>
+    </section>
+
+    <section id="results-section" aria-labelledby="results-heading">
+      <h2 id="results-heading">Your footprint</h2>
+      <div id="result-region" aria-live="polite" aria-atomic="true" class="results">
+        <p>Track an activity to see its carbon cost here.</p>
+      </div>
+    </section>
+
+    <section id="insights-section" aria-labelledby="insights-heading">
+      <h2 id="insights-heading">Personalized insights</h2>
+      <button id="insights-btn" type="button" aria-label="Refresh personalized insights">Refresh insights</button>
+      <div id="insights-region" aria-live="polite" aria-atomic="true" class="results">
+        <p>Your EcoScore, weekly trend and top reduction actions appear here.</p>
+      </div>
+    </section>
+
+    <section id="simulate-section" aria-labelledby="simulate-heading">
+      <h2 id="simulate-heading">What-if simulator</h2>
+      <div class="field">
+        <label for="scenario-text">Describe a change you are considering</label>
+        <input id="scenario-text" type="text" aria-describedby="scenario-hint"
+          placeholder="e.g. Switch 2 commutes a week to metro">
+        <p id="scenario-hint" class="hint">We project the weekly and annual carbon saving.</p>
+      </div>
+      <button id="simulate-btn" type="button" aria-label="Run what-if simulation">Simulate saving</button>
+      <div id="simulate-region" aria-live="polite" aria-atomic="true" class="results"></div>
+    </section>
+
+  </main>
+
+  <footer role="contentinfo">
+    <p>GreenPrint — built by Srinivas Reddy Yarragudi for [Challenge 3] Carbon Footprint Awareness Platform. Estimates are directional awareness figures.</p>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
