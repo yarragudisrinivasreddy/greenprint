@@ -30,7 +30,11 @@ class Config:
 def load_config() -> Config:
     """Build the immutable configuration snapshot for this process."""
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if not project_id:
+    
+    # Avoid querying metadata server/ADC during pytest runs to prevent offline hangs.
+    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("FLASK_ENV") == "testing"
+    
+    if not project_id and not is_testing:
         try:
             _, project_id = google.auth.default()
         except Exception:
