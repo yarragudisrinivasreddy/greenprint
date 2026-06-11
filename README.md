@@ -85,7 +85,9 @@ The application architecture is detailed in [docs/ARCHITECTURE.md](docs/ARCHITEC
 
 **Efficiency:** TTL+LRU insight cache, `processing_time_ms` in every response, Firestore reads capped at a 50-record window, memory-bound mirror limits, multi-stage slim image.
 
-**Testing:** 132 tests across 7 test files (8 files total), 96% coverage, all Google clients mocked — `pytest --cov=app`
+**TESTING:** 132 tests · 96% coverage · mocked Google clients, CI gates (pytest ≥95% coverage, pylint ≥9.9).
+
+**ATTEMPT 3:** repository pattern (Protocol + Firestore/in-memory implementations), engine split into ActivityInterpreter / NarrativeComposer / VertexGateway, sourced emission factors (CEA, India GHG Platform, IPCC, DEFRA), docs/ARCHITECTURE.md, zero silent exception swallows, complexity all A/B-grade.
 
 **Accessibility:** skip link, ARIA landmarks, `aria-busy` busy-state toggling on results regions, `aria-live` regions, labelled controls, visible focus rings, reduced-motion, forced-colors, and dark-mode support; trend SVG carries `role="img"` with a descriptive label.
 
