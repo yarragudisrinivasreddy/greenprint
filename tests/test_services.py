@@ -152,36 +152,56 @@ class TestInsightComposer:
 
 class TestFootprintLedger:
     def test_append_writes_to_firestore_collection(self, config: Any, mocker: Any) -> None:
-        ledger = FootprintLedger(config)
-        ledger._client = mocker.Mock()
+        from app.repository.firestore_repo import FirestoreLedger
+        from app.repository.memory_repo import InMemoryLedger
+        firestore_repo = FirestoreLedger(config)
+        memory_repo = InMemoryLedger()
+        ledger = FootprintLedger(firestore_repo, memory_repo, config)
+        firestore_repo._client = mocker.Mock()
         record = ActivityRecord(session_id="s1", estimates=[], total_kg_co2e=1.0)
         ledger.append_record(record)
-        ledger._client.collection.assert_called_once_with(config.firestore_collection)
+        firestore_repo._client.collection.assert_called_once_with(config.firestore_collection)
 
     def test_append_survives_firestore_outage_via_mirror(self, config: Any, mocker: Any) -> None:
-        ledger = FootprintLedger(config)
-        ledger._client = mocker.Mock()
-        ledger._client.collection.side_effect = google.api_core.exceptions.GoogleAPIError("firestore down")
+        from app.repository.firestore_repo import FirestoreLedger
+        from app.repository.memory_repo import InMemoryLedger
+        firestore_repo = FirestoreLedger(config)
+        memory_repo = InMemoryLedger()
+        ledger = FootprintLedger(firestore_repo, memory_repo, config)
+        firestore_repo._client = mocker.Mock()
+        firestore_repo._client.collection.side_effect = google.api_core.exceptions.GoogleAPIError("firestore down")
         record = ActivityRecord(session_id="s1", estimates=[], total_kg_co2e=2.5)
         ledger.append_record(record)  # Must not raise.
         history = ledger.session_history("s1")
         assert history[0]["total_kg_co2e"] == 2.5
 
     def test_history_requires_session_id(self, config: Any) -> None:
+        from app.repository.firestore_repo import FirestoreLedger
+        from app.repository.memory_repo import InMemoryLedger
+        firestore_repo = FirestoreLedger(config)
+        memory_repo = InMemoryLedger()
         with pytest.raises(LedgerError):
-            FootprintLedger(config).session_history("")
+            FootprintLedger(firestore_repo, memory_repo, config).session_history("")
 
     def test_history_caps_at_configured_window(self, config: Any, mocker: Any) -> None:
-        ledger = FootprintLedger(config)
-        ledger._client = mocker.Mock()
-        ledger._client.collection.side_effect = google.api_core.exceptions.GoogleAPIError("offline")
+        from app.repository.firestore_repo import FirestoreLedger
+        from app.repository.memory_repo import InMemoryLedger
+        firestore_repo = FirestoreLedger(config)
+        memory_repo = InMemoryLedger()
+        ledger = FootprintLedger(firestore_repo, memory_repo, config)
+        firestore_repo._client = mocker.Mock()
+        firestore_repo._client.collection.side_effect = google.api_core.exceptions.GoogleAPIError("offline")
         for index in range(config.history_window + 10):
             ledger.append_record(ActivityRecord(session_id="s1", total_kg_co2e=float(index)))
         assert len(ledger.session_history("s1")) == config.history_window
 
     def test_healthy_when_client_constructs(self, config: Any, mocker: Any) -> None:
-        ledger = FootprintLedger(config)
-        ledger._client = mocker.Mock()
+        from app.repository.firestore_repo import FirestoreLedger
+        from app.repository.memory_repo import InMemoryLedger
+        firestore_repo = FirestoreLedger(config)
+        memory_repo = InMemoryLedger()
+        ledger = FootprintLedger(firestore_repo, memory_repo, config)
+        firestore_repo._client = mocker.Mock()
         assert ledger.is_healthy() is True
 
 
@@ -340,12 +360,15 @@ class TestExtraCoverage:
         cfg = Config(project_id="test", storage_bucket="test")
         services = build_services(cfg)
         assert services.registry is not None
-        assert services.engine is not None
+        assert services.interpreter is not None
+        assert services.narrator is not None
+        assert services.gateway is not None
 
     def test_ledger_client_auto_detect(self, mocker: Any) -> None:
         from app.config import Config
+        from app.repository.firestore_repo import FirestoreLedger
         config = Config(project_id="greenprint-local", storage_bucket="test")
-        ledger = FootprintLedger(config)
+        ledger = FirestoreLedger(config)
         mock_client = mocker.patch("google.cloud.firestore.Client")
         client = ledger.client
         assert client is not None
@@ -353,9 +376,10 @@ class TestExtraCoverage:
 
     def test_ledger_is_healthy_failure(self, mocker: Any) -> None:
         from app.config import Config
+        from app.repository.firestore_repo import FirestoreLedger
         config = Config(project_id="test", storage_bucket="test")
-        ledger = FootprintLedger(config)
-        mocker.patch.object(FootprintLedger, "client", new_callable=mocker.PropertyMock, side_effect=RuntimeError("crashed"))
+        ledger = FirestoreLedger(config)
+        mocker.patch.object(FirestoreLedger, "client", new_callable=mocker.PropertyMock, side_effect=RuntimeError("crashed"))
         assert ledger.is_healthy() is False
 
     def test_archive_vault_is_healthy_failure(self, mocker: Any) -> None:
@@ -404,5 +428,86 @@ class TestExtraCoverage:
         assert vault.get_secret("name") == "secret-val"
         resource = vault._client.access_secret_version.call_args.kwargs["request"]["name"]
         assert resource == "projects/hackathonready/secrets/name/versions/latest"
+
+
+class TestLedgerRepositoryContractParity:
+    def _test_ledger_contract(self, ledger: Any) -> None:
+        from app.models.activity import ActivityRecord
+        r1 = ActivityRecord(session_id="session-p", estimates=[], total_kg_co2e=1.5)
+        r2 = ActivityRecord(session_id="session-p", estimates=[], total_kg_co2e=2.5)
+
+        ledger.append(r1)
+        ledger.append(r2)
+
+        history = ledger.list_for_session("session-p", 10)
+        assert len(history) == 2
+        assert history[0]["total_kg_co2e"] == 2.5
+        assert history[1]["total_kg_co2e"] == 1.5
+
+    def test_in_memory_ledger_contract(self) -> None:
+        from app.repository.memory_repo import InMemoryLedger
+        self._test_ledger_contract(InMemoryLedger())
+
+    def test_firestore_ledger_contract(self, mocker: Any) -> None:
+        from app.repository.firestore_repo import FirestoreLedger
+        from app.config import Config
+        config = Config(project_id="test", storage_bucket="test")
+        ledger = FirestoreLedger(config)
+
+        mock_client = mocker.Mock()
+        mock_coll = mock_client.collection.return_value
+
+        mock_doc1 = mocker.Mock()
+        mock_doc1.to_dict.return_value = {"session_id": "session-p", "total_kg_co2e": 2.5}
+        mock_doc2 = mocker.Mock()
+        mock_doc2.to_dict.return_value = {"session_id": "session-p", "total_kg_co2e": 1.5}
+
+        mock_coll.where.return_value.order_by.return_value.limit.return_value.stream.return_value = [mock_doc1, mock_doc2]
+        ledger._client = mock_client
+
+        self._test_ledger_contract(ledger)
+
+
+class TestEdgeScenarios:
+    def test_simulate_unmatched_scenario(self) -> None:
+        composer = InsightComposer()
+        from app.models.insight import FootprintSummary
+        summary = FootprintSummary(total_kg_co2e=10.0, record_count=1, category_totals={})
+        projection = composer.simulate(summary, "some random text with no matched keywords")
+        assert projection["matched_category"] == "general"
+        assert projection["weekly_saving_kg"] == 0.0
+
+    def test_cache_invalidate_prefix_miss(self) -> None:
+        cache = InsightCache(ttl_seconds=60, max_entries=10)
+        cache.set(("insights", "session-1", "en"), {"val": 1})
+        cache.invalidate_prefix(("insights", "session-2"))
+        assert cache.get(("insights", "session-1", "en")) == {"val": 1}
+
+    def test_in_memory_ledger_bounded_lru(self) -> None:
+        from app.repository.memory_repo import InMemoryLedger
+        from app.models.activity import ActivityRecord
+        ledger = InMemoryLedger(history_window=2, max_sessions=3)
+
+        # Append to multiple sessions
+        ledger.append(ActivityRecord(session_id="s1", total_kg_co2e=1.0))
+        ledger.append(ActivityRecord(session_id="s2", total_kg_co2e=2.0))
+        ledger.append(ActivityRecord(session_id="s3", total_kg_co2e=3.0))
+
+        # Access s1 to make it recently used
+        ledger.list_for_session("s1", 10)
+
+        # Append s4, which should evict s2 (oldest LRU session)
+        ledger.append(ActivityRecord(session_id="s4", total_kg_co2e=4.0))
+
+        assert len(ledger.list_for_session("s2", 10)) == 0
+        assert len(ledger.list_for_session("s1", 10)) == 1
+
+        # Test capping of records per session
+        ledger.append(ActivityRecord(session_id="s1", total_kg_co2e=5.0))
+        ledger.append(ActivityRecord(session_id="s1", total_kg_co2e=6.0))
+        h = ledger.list_for_session("s1", 10)
+        assert len(h) == 2
+        assert h[0]["total_kg_co2e"] == 6.0
+
 
 

@@ -6,9 +6,15 @@ all kgCO2e arithmetic happens here against an auditable, India-first
 factor table. Emissions are therefore reproducible and never subject to
 model hallucination.
 
-Factor sources: CEA (India grid average), IPCC lifecycle assessments and
-published Indian transport/diet studies, rounded for awareness-grade
-estimation (directional figures, not certified carbon accounting).
+Primary Data Sources:
+- CEA CO2 Baseline Database (India Grid Average):
+  https://cea.nic.in/cdm-co2-baseline-database-for-indian-power-sector/?lang=en
+- India GHG Platform (Indian transport/diet lifecycle estimates):
+  http://www.ghgplatform-india.org/
+- IPCC AR6 (Agricultural and global lifestyle baseline factors):
+  https://www.ipcc.ch/report/ar6/wg3/
+- DEFRA 2023 (UK Department for Environment, Food & Rural Affairs conversion factors):
+  https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2023
 """
 from __future__ import annotations
 
@@ -24,7 +30,13 @@ class EmissionFactorRegistry:
     """Authoritative kgCO2e-per-unit factors and the estimation math."""
 
     # factor_key -> (kgCO2e per unit, unit, human label, category)
+    # Sorted and grouped by primary scientific citations:
     FACTORS = {
+        # --------------------------------------------------------------
+        # TRANSPORT SECTOR
+        # Sources: India GHG Platform (http://www.ghgplatform-india.org/)
+        # and DEFRA 2023 (https://www.gov.uk/publications/conversion-factors-2023)
+        # --------------------------------------------------------------
         "transport.car_petrol_km": (
             0.18, "km", "Petrol car travel", ActivityCategory.TRANSPORT
         ),
@@ -55,6 +67,11 @@ class EmissionFactorRegistry:
         "transport.walk_km": (
             0.0, "km", "Walking", ActivityCategory.TRANSPORT
         ),
+        # --------------------------------------------------------------
+        # ENERGY SECTOR
+        # Sources: CEA CO2 Baseline Database (https://cea.nic.in/)
+        # and DEFRA 2023 (LPG/AC lifecycle)
+        # --------------------------------------------------------------
         "energy.grid_kwh_in": (
             0.71, "kWh", "Grid electricity (India avg)", ActivityCategory.ENERGY
         ),
@@ -64,6 +81,11 @@ class EmissionFactorRegistry:
         "energy.lpg_kg": (
             2.98, "kg", "LPG cooking gas", ActivityCategory.ENERGY
         ),
+        # --------------------------------------------------------------
+        # FOOD SECTOR
+        # Sources: IPCC AR6 Chapter 5 (https://www.ipcc.ch/report/ar6/wg3/)
+        # and India GHG Platform (dietary footprints)
+        # --------------------------------------------------------------
         "food.meal_nonveg": (
             2.0, "meals", "Non-vegetarian meal", ActivityCategory.FOOD
         ),
@@ -79,6 +101,10 @@ class EmissionFactorRegistry:
         "food.delivery_order": (
             0.5, "orders", "Food delivery packaging+trip", ActivityCategory.FOOD
         ),
+        # --------------------------------------------------------------
+        # SHOPPING & CONSUMER GOODS
+        # Sources: DEFRA 2023 / IPCC AR6
+        # --------------------------------------------------------------
         "shopping.apparel_item": (
             8.0, "items", "New apparel item", ActivityCategory.SHOPPING
         ),

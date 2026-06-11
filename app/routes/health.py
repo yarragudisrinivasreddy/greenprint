@@ -24,7 +24,7 @@ def health() -> Any:
     """Per-service readiness report; degraded services are named."""
     services = current_app.extensions["greenprint_services"]
     report = {
-        "gemini": services.engine.is_healthy(),
+        "gemini": services.gateway.is_healthy(),
         "emission_registry": services.registry.is_healthy(),
         "translate": services.translator.is_healthy(),
         "firestore": services.ledger.is_healthy(),

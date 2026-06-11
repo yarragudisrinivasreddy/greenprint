@@ -16,8 +16,15 @@ from app.models.insight import FootprintSummary, ReductionAction
 
 logger = get_logger(__name__)
 
-# Awareness baseline: an average urban Indian individual's daily
-# footprint (~5.5 kgCO2e/day) — the yardstick EcoScore measures against.
+# Awareness baseline: an average urban Indian individual's daily footprint.
+# Derivation: Annual urban Indian per capita carbon footprint is estimated at
+# ~2.0 tonnes CO2e (equivalent to ~2000 kgCO2e / 365 days = ~5.48 kgCO2e/day,
+# rounded to 5.5 kgCO2e/day).
+# Primary Sources:
+# - India GHG Platform (household transport/energy/waste emissions):
+#   http://www.ghgplatform-india.org/
+# - World Bank Data (India per capita CO2 emissions):
+#   https://data.worldbank.org/indicator/EN.ATM.CO2E.PC
 DAILY_BASELINE_KG = 5.5
 
 # EcoScore weights and limits
@@ -200,7 +207,6 @@ class InsightComposer:
     # ------------------------------------------------------------------
     def weekly_trend_svg(self, history: list[dict[str, Any]]) -> str:
         """Render the last 7 tracked days as an accessible inline SVG."""
-        # pylint: disable=too-many-locals
         daily_totals = self._daily_totals(history)
         days = sorted(daily_totals)[-7:]
         values = [daily_totals[d] for d in days] or [0.0]
@@ -210,18 +216,27 @@ class InsightComposer:
         bar_zone = width - 2 * pad
         bar_width = bar_zone / max(len(values), 1)
         baseline_y = height - pad - (DAILY_BASELINE_KG / peak) * (height - 2 * pad)
-        bars: list[str] = []
-        for index, value in enumerate(values):
+
+        def render_bar(value: float, index: int, day_label: str) -> str:
             bar_height = (value / peak) * (height - 2 * pad)
             x = pad + index * bar_width + 4
             y = height - pad - bar_height
             color = "#2e7d32" if value <= DAILY_BASELINE_KG else "#ef6c00"
-            label = days[index][5:] if index < len(days) else ""
-            bars.append(
+            label = day_label[5:] if day_label else ""
+            return (
                 f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width - 8:.1f}" '
                 f'height="{bar_height:.1f}" rx="4" fill="{color}">'
                 f"<title>{label}: {value} kgCO2e</title></rect>"
             )
+
+        bars = [
+            render_bar(
+                val,
+                idx,
+                days[idx] if idx < len(days) else "",
+            )
+            for idx, val in enumerate(values)
+        ]
         return (
             f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" '
             f'role="img" aria-label="Daily carbon footprint for the '

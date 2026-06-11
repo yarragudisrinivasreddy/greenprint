@@ -9,7 +9,15 @@
   }
 
   function setBusy(regionId, message) {
-    document.getElementById(regionId).innerHTML = "<p>" + message + "</p>";
+    var el = document.getElementById(regionId);
+    el.setAttribute("aria-busy", "true");
+    el.innerHTML = "<p>" + message + "</p>";
+  }
+
+  function handleError(regionId, message) {
+    var el = document.getElementById(regionId);
+    el.setAttribute("aria-busy", "false");
+    el.innerHTML = "<p role='alert'>" + message + "</p>";
   }
 
   function postJson(url, body) {
@@ -17,11 +25,17 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
-    }).then(function (response) { return response.json(); });
+    }).then(function (response) {
+      if (!response.ok) {
+        throw new Error("HTTP error " + response.status);
+      }
+      return response.json();
+    });
   }
 
   function renderEstimates(data) {
     var region = document.getElementById("result-region");
+    region.setAttribute("aria-busy", "false");
     if (data.status !== "ok") {
       region.innerHTML = "<p role='alert'>" + (data.message || "Something went wrong.") + "</p>";
       return;
@@ -42,6 +56,7 @@
 
   function renderInsights(data) {
     var region = document.getElementById("insights-region");
+    region.setAttribute("aria-busy", "false");
     if (data.status !== "ok") {
       region.innerHTML = "<p role='alert'>" + (data.message || "Could not load insights.") + "</p>";
       return;
@@ -61,6 +76,7 @@
 
   function renderSimulation(data) {
     var region = document.getElementById("simulate-region");
+    region.setAttribute("aria-busy", "false");
     if (data.status !== "ok") {
       region.innerHTML = "<p role='alert'>" + (data.message || "Could not simulate.") + "</p>";
       return;
@@ -73,32 +89,39 @@
   }
 
   function loadChips() {
-    fetch("/api/factors").then(function (r) { return r.json(); }).then(function (data) {
-      if (data.status !== "ok") { return; }
-      var row = document.getElementById("chip-row");
-      var preferred = [
-        "transport.car_petrol_km", "transport.metro_km", "transport.bus_km",
-        "energy.ac_hour", "food.meal_nonveg", "food.meal_veg", "shopping.parcel_delivery"
-      ];
-      preferred.forEach(function (key) {
-        var factor = data.factors[key];
-        if (!factor) { return; }
-        var chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "chip";
-        chip.textContent = factor.label;
-        chip.setAttribute("aria-label", "Add one " + factor.unit + " of " + factor.label);
-        chip.addEventListener("click", function () {
-          setBusy("result-region", "Estimating…");
-          postJson("/api/track", {
-            session_id: sessionId,
-            language: language(),
-            activities: [{ factor_key: key, quantity: 1 }]
-          }).then(renderEstimates);
+    fetch("/api/factors")
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP error " + r.status); }
+        return r.json();
+      })
+      .then(function (data) {
+        if (data.status !== "ok") { return; }
+        var row = document.getElementById("chip-row");
+        var preferred = [
+          "transport.car_petrol_km", "transport.metro_km", "transport.bus_km",
+          "energy.ac_hour", "food.meal_nonveg", "food.meal_veg", "shopping.parcel_delivery"
+        ];
+        preferred.forEach(function (key) {
+          var factor = data.factors[key];
+          if (!factor) { return; }
+          var chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip";
+          chip.textContent = factor.label;
+          chip.setAttribute("aria-label", "Add one " + factor.unit + " of " + factor.label);
+          chip.addEventListener("click", function () {
+            setBusy("result-region", "Estimating…");
+            postJson("/api/track", {
+              session_id: sessionId,
+              language: language(),
+              activities: [{ factor_key: key, quantity: 1 }]
+            }).then(renderEstimates).catch(function () {
+              handleError("result-region", "Network error. Please try again.");
+            });
+          });
+          row.appendChild(chip);
         });
-        row.appendChild(chip);
       });
-    });
   }
 
   document.getElementById("track-btn").addEventListener("click", function () {
@@ -110,7 +133,10 @@
     }
     setBusy("result-region", "Estimating…");
     postJson("/api/track", { text: text, language: language(), session_id: sessionId })
-      .then(renderEstimates);
+      .then(renderEstimates)
+      .catch(function () {
+        handleError("result-region", "Network error. Please try again.");
+      });
   });
 
   document.getElementById("insights-btn").addEventListener("click", function () {
@@ -122,8 +148,14 @@
     setBusy("insights-region", "Composing insights…");
     fetch("/api/insights?session_id=" + encodeURIComponent(sessionId) +
       "&language=" + encodeURIComponent(language()))
-      .then(function (r) { return r.json(); })
-      .then(renderInsights);
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP error " + r.status); }
+        return r.json();
+      })
+      .then(renderInsights)
+      .catch(function () {
+        handleError("insights-region", "Network error. Please try again.");
+      });
   });
 
   document.getElementById("simulate-btn").addEventListener("click", function () {
@@ -135,7 +167,10 @@
     }
     setBusy("simulate-region", "Projecting…");
     postJson("/api/simulate", { scenario: scenario, language: language(), session_id: sessionId })
-      .then(renderSimulation);
+      .then(renderSimulation)
+      .catch(function () {
+        handleError("simulate-region", "Network error. Please try again.");
+      });
   });
 
   loadChips();

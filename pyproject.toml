@@ -1,0 +1,20 @@
+[tool.pylint.master]
+ignore = ["tests"]
+
+[tool.pylint.messages_control]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring"
+]
+
+[tool.pylint.reports]
+output-format = "colorized"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 95

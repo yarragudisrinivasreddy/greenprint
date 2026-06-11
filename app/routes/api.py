@@ -89,7 +89,7 @@ def track_activity() -> Any:
 
     items = _extract_structured_items(body)
     if text:
-        items.extend(services.engine.interpret_activity(text))
+        items.extend(services.interpreter.interpret_activity(text))
     if not items:
         raise ValidationError("Provide 'text' or a non-empty 'activities' list.")
 
@@ -103,12 +103,12 @@ def track_activity() -> Any:
         total_kg_co2e=total,
         source_text=text[:500],
     )
-    services.ledger.append_record(record)
+    services.ledger.append(record)
     services.cache.invalidate_prefix(("insights", session_id))
     services.vault.archive_summary(session_id, record.to_dict())
     motivation = services.sentiment.gauge_motivation(text)
 
-    eco_tip = services.engine.draft_eco_tip(estimates, total)
+    eco_tip = services.narrator.draft_eco_tip(estimates, total)
     payload = _compose_track_payload(
         session_id, estimates, total, eco_tip, motivation["tone"]
     )
@@ -159,7 +159,7 @@ def simulate_scenario() -> Any:
     history = services.ledger.session_history(session_id) if session_id else []
     summary = services.composer.summarize(history)
     projection = services.composer.simulate(summary, scenario)
-    projection["narrative"] = services.engine.draft_simulation_narrative(
+    projection["narrative"] = services.narrator.draft_simulation_narrative(
         scenario, float(projection["weekly_saving_kg"])
     )
     payload = {"status": "ok", **projection}

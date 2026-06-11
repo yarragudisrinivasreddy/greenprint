@@ -1,37 +1,25 @@
-# pylint: disable=duplicate-code
-"""CarbonIntelligenceEngine — GreenPrint's activity interpreter.
+"""ActivityInterpreter — parses plain text descriptions into structured activities.
 
-Role in the product: convert a user's plain-language description of
-their day ("drove 12 km to office, ordered biryani, ran the AC for 6
-hours") into structured `ActivityItem`s keyed to the deterministic
-EmissionFactorRegistry. The engine also drafts the personalised eco tip
-and the what-if simulation narrative.
-
-Resilience: if Vertex AI is unavailable or quota-exhausted during
-evaluation, a deterministic keyword parser produces a best-effort
-interpretation so the platform never returns an empty result.
+Why: Segregates plain language parsing from narrative generation to improve maintainability,
+adhere to single responsibility principles, and simplify unit testing.
 """
+# pylint: disable=duplicate-code
 from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import google.api_core.exceptions
-import google.auth
 import google.auth.exceptions
-import vertexai
-from google.cloud import aiplatform
-from vertexai.generative_models import GenerativeModel
 
 from app.exceptions import EstimationError
 from app.logging_config import get_logger
 from app.models.activity import ActivityItem
 
 if TYPE_CHECKING:
-    from app.config import Config
     from app.services.emission_registry import EmissionFactorRegistry
-    from app.models.activity import EmissionEstimate
+    from app.services.vertex_gateway import VertexGateway
 
 logger = get_logger(__name__)
 
@@ -53,8 +41,6 @@ Rules:
 User description: {text}
 """
 
-# Deterministic fallback vocabulary: (regex, factor_key, default_quantity).
-# Quantities are captured when the user states "<number> km/hours/meals".
 _FALLBACK_RULES = (
     (r"(metro)", "transport.metro_km", 10.0),
     (r"(bus)", "transport.bus_km", 10.0),
@@ -91,37 +77,14 @@ UPSTREAM_FAILURES = (
 INTERPRET_FAILURES = UPSTREAM_FAILURES + (EstimationError,)
 
 
-class CarbonIntelligenceEngine:
+# pylint: disable=too-few-public-methods
+class ActivityInterpreter:
     """Gemini-backed interpreter with a deterministic safety net."""
 
-    def __init__(self, config: Config, registry: EmissionFactorRegistry) -> None:
-        self._config = config
+    def __init__(self, gateway: VertexGateway, registry: EmissionFactorRegistry) -> None:
+        self._gateway = gateway
         self._registry = registry
-        self._model: GenerativeModel | None = None
-        self._initialized = False
 
-    def _ensure_model(self) -> GenerativeModel:
-        """Initialise Vertex AI lazily — once per process, never per request."""
-        if not self._initialized:
-            project = self._config.project_id
-            if project == "greenprint-local":
-                try:
-                    _, resolved_project = google.auth.default()
-                    if resolved_project:
-                        project = resolved_project
-                except Exception:  # pylint: disable=broad-exception-caught
-                    pass
-            proj_arg = None if project == "greenprint-local" else project
-            vertexai.init(project=proj_arg, location=self._config.location)
-            aiplatform.init(project=proj_arg, location=self._config.location)
-            self._model = GenerativeModel(self._config.gemini_model_name)
-            self._initialized = True
-        assert self._model is not None
-        return self._model
-
-    # ------------------------------------------------------------------
-    # Activity interpretation
-    # ------------------------------------------------------------------
     def interpret_activity(self, text: str) -> list[ActivityItem]:
         """Interpret free text into ActivityItems (Gemini, then fallback)."""
         if not text or not text.strip():
@@ -138,20 +101,18 @@ class CarbonIntelligenceEngine:
             for key, meta in self._registry.factor_catalog().items()
         )
         prompt = _INTERPRET_PROMPT.format(catalog=catalog, text=text.strip())
-        response = self._ensure_model().generate_content(prompt)
+        response = self._gateway.get_model().generate_content(prompt)
         return self._parse_model_json(response.text)
 
-    def _parse_model_json(self, raw: str) -> list[ActivityItem]:
-        """Extract the JSON array from a model response, tolerating fences."""
+    def _strip_fences(self, raw: str) -> str:
         cleaned = raw.strip()
         cleaned = re.sub(r"^```(?:json)?|```$", "", cleaned, flags=re.MULTILINE).strip()
         match = re.search(r"\[.*\]", cleaned, re.DOTALL)
         if not match:
             raise EstimationError("Model response contained no activity array.")
-        try:
-            parsed = json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise EstimationError("Model response was not valid JSON.") from exc
+        return match.group(0)
+
+    def _coerce_items(self, parsed: list[Any]) -> list[ActivityItem]:
         items = []
         for entry in parsed:
             if not isinstance(entry, dict) or "factor_key" not in entry:
@@ -164,6 +125,18 @@ class CarbonIntelligenceEngine:
                     confidence=float(entry.get("confidence", 0.9) or 0.9),
                 )
             )
+        return items
+
+    def _parse_model_json(self, raw: str) -> list[ActivityItem]:
+        """Extract the JSON array from a model response, tolerating fences."""
+        json_str = self._strip_fences(raw)
+        try:
+            parsed = json.loads(json_str)
+        except json.JSONDecodeError as exc:
+            raise EstimationError("Model response was not valid JSON.") from exc
+        if not isinstance(parsed, list):
+            raise EstimationError("Model response was not a JSON array.")
+        items = self._coerce_items(parsed)
         if not items:
             raise EstimationError("Model produced no usable activities.")
         return items
@@ -191,55 +164,3 @@ class CarbonIntelligenceEngine:
         if not items:
             raise EstimationError("Could not recognise any trackable activity.")
         return items
-
-    # ------------------------------------------------------------------
-    # Narrative generation (tips + simulations)
-    # ------------------------------------------------------------------
-    def draft_eco_tip(self, estimates: list[EmissionEstimate], total_kg: float) -> str:
-        """One personalised, actionable tip for this tracking event."""
-        try:
-            top = max(estimates, key=lambda e: e.emission_kg_co2e)
-            prompt = (
-                "In under 35 words, give one upbeat, specific tip to reduce the "
-                f"largest item of this footprint: {top.label}, "
-                f"{top.emission_kg_co2e} kgCO2e of a {total_kg} kgCO2e day. "
-                "No preamble, plain text."
-            )
-            return self._ensure_model().generate_content(prompt).text.strip()
-        except UPSTREAM_FAILURES:
-            return self._fallback_tip(estimates)
-
-    def _fallback_tip(self, estimates: list[EmissionEstimate]) -> str:
-        if not estimates:
-            return "Log one activity a day — awareness is the first reduction."
-        top = max(estimates, key=lambda e: e.emission_kg_co2e)
-        tips = {
-            "transport": "Swap one short car trip this week for metro, bus or cycling.",
-            "energy": "Raise the AC set-point by 1°C — it cuts cooling energy by about 6%.",
-            "food": "Try one extra vegetarian meal this week — about 1.3 kgCO2e saved per swap.",
-            "shopping": "Batch online orders into one delivery to cut parcel trips.",
-        }
-        return tips.get(top.category, "Small daily swaps compound into real reductions.")
-
-    def draft_simulation_narrative(self, scenario: str, saving_kg: float) -> str:
-        """Short narrative for the what-if simulator."""
-        try:
-            prompt = (
-                f"In under 40 words, encourage a user whose scenario '{scenario}' "
-                f"would save {saving_kg} kgCO2e per week. Plain text, no preamble."
-            )
-            return self._ensure_model().generate_content(prompt).text.strip()
-        except UPSTREAM_FAILURES:
-            return (
-                f"This change saves about {saving_kg} kgCO2e every week — "
-                f"roughly {round(saving_kg * 52, 1)} kg a year. Worth starting today."
-            )
-
-    def is_healthy(self) -> bool:
-        """Healthy if Vertex AI is initialisable; heuristics cover outages."""
-        try:
-            self._ensure_model()
-            return True
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Resilience boundary: health probe must never crash the service.
-            return False

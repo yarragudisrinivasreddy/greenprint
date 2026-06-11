@@ -18,8 +18,8 @@ from app.services.insight_composer import InsightComposer
 from app.models.activity import ActivityItem
 
 
-class FakeEngine:
-    """Deterministic stand-in for CarbonIntelligenceEngine."""
+class FakeInterpreter:
+    """Deterministic stand-in for ActivityInterpreter."""
 
     def __init__(self) -> None:
         self.healthy = True
@@ -27,11 +27,40 @@ class FakeEngine:
     def interpret_activity(self, text: str) -> list[ActivityItem]:
         return [ActivityItem(factor_key="transport.car_petrol_km", quantity=10.0, note="fake", confidence=0.9)]
 
+    def is_healthy(self) -> bool:
+        return self.healthy
+
+
+class FakeNarrator:
+    """Deterministic stand-in for NarrativeComposer."""
+
+    def __init__(self) -> None:
+        self.healthy = True
+
     def draft_eco_tip(self, estimates: list[Any], total_kg: float) -> str:
         return "Swap one car trip for the metro this week."
 
     def draft_simulation_narrative(self, scenario: str, saving_kg: float) -> str:
         return f"Saving {saving_kg} kgCO2e weekly is a great start."
+
+    def is_healthy(self) -> bool:
+        return self.healthy
+
+
+class FakeGateway:
+    """Deterministic stand-in for VertexGateway."""
+
+    def __init__(self) -> None:
+        self.healthy = True
+
+    def get_model(self) -> Any:
+        return self
+
+    def generate_content(self, prompt: str) -> Any:
+        class FakeResponse:
+            def __init__(self, text: str):
+                self.text = text
+        return FakeResponse("Fake Gemini response")
 
     def is_healthy(self) -> bool:
         return self.healthy
@@ -44,11 +73,17 @@ class FakeLedger:
         self.records: dict[str, list[dict[str, Any]]] = {}
         self.healthy = True
 
-    def append_record(self, record: Any) -> None:
+    def append(self, record: Any) -> None:
         self.records.setdefault(record.session_id, []).append(record.to_dict())
 
+    def list_for_session(self, session_id: str, limit: int) -> list[dict[str, Any]]:
+        return list(reversed(self.records.get(session_id, [])))[:limit]
+
+    def append_record(self, record: Any) -> None:
+        self.append(record)
+
     def session_history(self, session_id: str) -> list[dict[str, Any]]:
-        return list(reversed(self.records.get(session_id, [])))
+        return self.list_for_session(session_id, 10)
 
     def is_healthy(self) -> bool:
         return self.healthy
@@ -112,16 +147,19 @@ class FakeSentiment:
 
 @pytest.fixture()
 def services() -> ServiceContainer:
+    gateway = FakeGateway()
     return ServiceContainer(
         registry=EmissionFactorRegistry(),
-        engine=FakeEngine(),
+        interpreter=FakeInterpreter(),
         composer=InsightComposer(),
+        narrator=FakeNarrator(),
         ledger=FakeLedger(),
         translator=FakeTranslator(),
         vault=FakeVault(),
         secrets=FakeSecrets(),
         sentiment=FakeSentiment(),
         cache=InsightCache(ttl_seconds=300, max_entries=16),
+        gateway=gateway,
     )
 
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import google.api_core.exceptions
-import google.auth
 import google.auth.exceptions
 from google.cloud import translate_v3
 
@@ -23,6 +22,7 @@ from app.constants import (
     UNIT_SYMBOLS,
 )
 from app.exceptions import TranslationError
+from app.config import resolve_project_id
 from app.logging_config import get_logger
 
 if TYPE_CHECKING:
@@ -56,12 +56,7 @@ class ResponseTranslator:
     def _parent(self) -> str:
         project = self._config.project_id
         if project == "greenprint-local":
-            try:
-                _, resolved_project = google.auth.default()
-                if resolved_project:
-                    project = resolved_project
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
+            project = resolve_project_id()
         return f"projects/{project}/locations/global"
 
     def translate_response(self, payload: dict[str, Any], target_language: str) -> dict[str, Any]:

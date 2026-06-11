@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import google.api_core.exceptions
-import google.auth
 import google.auth.exceptions
 from google.cloud import secretmanager
 
+from app.config import resolve_project_id
 from app.logging_config import get_logger
 
 if TYPE_CHECKING:
@@ -51,12 +51,7 @@ class SecretVault:
         try:
             project = self._config.project_id
             if project == "greenprint-local":
-                try:
-                    _, resolved_project = google.auth.default()
-                    if resolved_project:
-                        project = resolved_project
-                except Exception:  # pylint: disable=broad-exception-caught
-                    pass
+                project = resolve_project_id()
             resource = f"projects/{project}/secrets/{name}/versions/latest"
             response = self.client.access_secret_version(request={"name": resource})
             value = response.payload.data.decode("utf-8")

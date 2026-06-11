@@ -22,14 +22,16 @@ from app.security import register_security
 if TYPE_CHECKING:
     from app.config import Config
     from app.services.archive_vault import ArchiveVault
-    from app.services.carbon_engine import CarbonIntelligenceEngine
+    from app.services.activity_interpreter import ActivityInterpreter
     from app.services.emission_registry import EmissionFactorRegistry
-    from app.services.footprint_ledger import FootprintLedger
+    from app.repository.base import LedgerRepository
     from app.services.insight_cache import InsightCache
     from app.services.insight_composer import InsightComposer
     from app.services.secret_vault import SecretVault
     from app.services.sentiment_lens import SentimentLens
     from app.services.translator import ResponseTranslator
+    from app.services.vertex_gateway import VertexGateway
+    from app.services.narrative_composer import NarrativeComposer
 
 logger = get_logger(__name__)
 
@@ -39,39 +41,53 @@ class ServiceContainer:
     """All domain services GreenPrint routes depend on."""
 
     registry: EmissionFactorRegistry
-    engine: CarbonIntelligenceEngine
+    interpreter: ActivityInterpreter
     composer: InsightComposer
-    ledger: FootprintLedger
+    narrator: NarrativeComposer
+    ledger: LedgerRepository
     translator: ResponseTranslator
     vault: ArchiveVault
     secrets: SecretVault
     sentiment: SentimentLens
     cache: InsightCache
+    gateway: VertexGateway
 
 
 def build_services(config: Config) -> ServiceContainer:
     """Construct the production service graph (lazy Google clients)."""
     from app.services.archive_vault import ArchiveVault
-    from app.services.carbon_engine import CarbonIntelligenceEngine
+    from app.services.activity_interpreter import ActivityInterpreter
     from app.services.emission_registry import EmissionFactorRegistry
+    from app.repository.firestore_repo import FirestoreLedger
+    from app.repository.memory_repo import InMemoryLedger
     from app.services.footprint_ledger import FootprintLedger
     from app.services.insight_cache import InsightCache
     from app.services.insight_composer import InsightComposer
     from app.services.secret_vault import SecretVault
     from app.services.sentiment_lens import SentimentLens
     from app.services.translator import ResponseTranslator
+    from app.services.vertex_gateway import VertexGateway
+    from app.services.narrative_composer import NarrativeComposer
 
     registry = EmissionFactorRegistry()
+    gateway = VertexGateway(config)
+
+    firestore_repo = FirestoreLedger(config)
+    memory_repo = InMemoryLedger()
+    ledger = FootprintLedger(firestore_repo, memory_repo, config)
+
     return ServiceContainer(
         registry=registry,
-        engine=CarbonIntelligenceEngine(config, registry),
+        interpreter=ActivityInterpreter(gateway, registry),
         composer=InsightComposer(),
-        ledger=FootprintLedger(config),
+        narrator=NarrativeComposer(gateway),
+        ledger=ledger,
         translator=ResponseTranslator(config),
         vault=ArchiveVault(config),
         secrets=SecretVault(config),
         sentiment=SentimentLens(),
         cache=InsightCache(config.insight_cache_ttl_seconds, config.insight_cache_max_entries),
+        gateway=gateway,
     )
 
 
