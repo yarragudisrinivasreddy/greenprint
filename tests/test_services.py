@@ -35,6 +35,14 @@ def config() -> Any:
     return load_config()
 
 
+@pytest.fixture()
+def clear_project_cache() -> None:
+    from app.config import resolve_project_id
+    resolve_project_id.cache_clear()
+    yield
+    resolve_project_id.cache_clear()
+
+
 class TestTranslatorExclusions:
     def test_english_passthrough_makes_no_calls(self, translator: ResponseTranslator) -> None:
         payload = {"eco_tip": "Walk more"}
@@ -408,19 +416,27 @@ class TestExtraCoverage:
         mocker.patch.object(ResponseTranslator, "client", new_callable=mocker.PropertyMock, side_effect=RuntimeError("crashed"))
         assert translator.is_healthy() is False
 
-    def test_translator_parent_dynamic_project(self, mocker: Any) -> None:
+    def test_translator_parent_dynamic_project(self, mocker: Any, clear_project_cache: None) -> None:
+        import os
         from app.config import Config
         config = Config(project_id="greenprint-local", storage_bucket="test")
         translator = ResponseTranslator(config)
         mocker.patch("google.auth.default", return_value=(None, "hackathonready"))
+        mocker.patch.dict(os.environ)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
         assert translator._parent == "projects/hackathonready/locations/global"
 
-    def test_secret_vault_dynamic_project(self, mocker: Any) -> None:
+    def test_secret_vault_dynamic_project(self, mocker: Any, clear_project_cache: None) -> None:
+        import os
         from app.config import Config
         config = Config(project_id="greenprint-local", storage_bucket="test")
         vault = SecretVault(config)
         vault._client = mocker.Mock()
         mocker.patch("google.auth.default", return_value=(None, "hackathonready"))
+        mocker.patch.dict(os.environ)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
         payload = mocker.Mock()
         payload.payload.data = b"secret-val"
         vault._client.access_secret_version.return_value = payload

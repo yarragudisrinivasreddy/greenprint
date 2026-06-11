@@ -3,12 +3,18 @@
 Configuration is frozen at startup so no request handler can mutate
 global state — a deliberate guard for multi-worker Cloud Run deployments.
 """
+from __future__ import annotations
+
+import functools
 import os
 from dataclasses import dataclass, field
-from unittest.mock import Mock
 
 import google.auth
 import google.auth.exceptions
+
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -30,44 +36,22 @@ class Config:
     history_window: int = 50  # Cap Firestore reads — efficiency over completeness.
 
 
-_RESOLVED_PROJECT_ID: str | None = None
-
-
+@functools.lru_cache(maxsize=1)
 def resolve_project_id() -> str:
-    """Resolve and cache the project ID from environment or ADC.
-
-    Why: Centralizes credentials resolution to prevent hanging pytest runs
-    and logs authentication errors securely.
-    """
-    global _RESOLVED_PROJECT_ID
-
-    is_mocked = isinstance(google.auth.default, Mock)
-
-    if _RESOLVED_PROJECT_ID is not None and not is_mocked:
-        return _RESOLVED_PROJECT_ID
-
+    """Resolve the GCP project ID once per process (env first, ADC second)."""
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-
-    # Avoid querying metadata server/ADC during pytest runs to prevent offline hangs.
-    is_testing = "PYTEST_CURRENT_TEST" in os.environ or os.environ.get("FLASK_ENV") == "testing"
-
-    if not project_id and (not is_testing or is_mocked):
-        try:
-            _, resolved = google.auth.default()
-            if resolved:
-                project_id = resolved
-        except (google.auth.exceptions.GoogleAuthError, OSError) as exc:
-            from app.logging_config import get_logger
-            get_logger(__name__).warning(
-                "Google credentials resolution failed (falling back to local): %s", exc
-            )
-
-    if not project_id:
-        project_id = "greenprint-local"
-
-    if not is_mocked:
-        _RESOLVED_PROJECT_ID = project_id
-    return project_id
+    if project_id:
+        return project_id
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        # Tests must never query the ADC metadata server (offline hang).
+        return "greenprint-local"
+    try:
+        _, resolved = google.auth.default()
+        if resolved:
+            return resolved
+    except (google.auth.exceptions.GoogleAuthError, OSError) as exc:
+        logger.warning("ADC project resolution failed; using local default: %s", exc)
+    return "greenprint-local"
 
 
 def load_config() -> Config:

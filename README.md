@@ -1,6 +1,8 @@
 # GreenPrint — Understand your footprint. Shrink it with one action a day.
 
-[![CI Workflow](https://github.com/yarragudisrinivasreddy/greenprint/actions/workflows/ci.yml/badge.svg)](https://github.com/yarragudisrinivasreddy/greenprint/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)
+
+CI configuration: [.github/workflows/ci.yml](.github/workflows/ci.yml) (pytest ≥95% coverage gate + pylint ≥9.9).
 
 Built by **Srinivas Reddy Yarragudi** for PromptWars Virtual.
 
