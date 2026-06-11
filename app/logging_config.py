@@ -4,6 +4,8 @@ Cloud Run ingests stdout; emitting one JSON object per line lets Cloud
 Logging index severity and module without custom parsers. Each module
 requests its own logger so log origin is always attributable.
 """
+from __future__ import annotations
+
 import json
 import logging
 import sys

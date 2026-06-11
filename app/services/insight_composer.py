@@ -5,7 +5,10 @@ actions with quantified savings, an EcoScore that rewards low-carbon
 days and streaks, a server-rendered SVG weekly trend (deterministic — no
 image-generation quota risk), and the what-if simulator's arithmetic.
 """
+from __future__ import annotations
+
 from datetime import datetime, timezone
+from typing import Any
 
 from app.constants import ECO_SCORE_MAX, ActivityCategory
 from app.logging_config import get_logger
@@ -16,6 +19,14 @@ logger = get_logger(__name__)
 # Awareness baseline: an average urban Indian individual's daily
 # footprint (~5.5 kgCO2e/day) — the yardstick EcoScore measures against.
 DAILY_BASELINE_KG = 5.5
+
+# EcoScore weights and limits
+NEW_SESSION_SCORE = 50
+BASELINE_WEIGHT = 60
+STREAK_BONUS_PER_DAY = 5
+STREAK_BONUS_CAP = 25
+CONSISTENCY_BONUS_PER_DAY = 3
+CONSISTENCY_BONUS_CAP = 15
 
 # Swap library: (category, action template, saving per relevant kg tracked).
 _SWAP_LIBRARY = {
@@ -44,13 +55,13 @@ class InsightComposer:
     # ------------------------------------------------------------------
     # Aggregation
     # ------------------------------------------------------------------
-    def summarize(self, history: list) -> FootprintSummary:
+    def summarize(self, history: list[dict[str, Any]]) -> FootprintSummary:
         """Aggregate a session's ledger records into category totals."""
-        category_totals = {}
+        category_totals: dict[str, float] = {}
         total = 0.0
         for record in history:
             for estimate in record.get("estimates", []):
-                category = estimate.get("category", "other")
+                category = str(estimate.get("category", "other"))
                 emission = float(estimate.get("emission_kg_co2e", 0.0))
                 category_totals[category] = round(category_totals.get(category, 0.0) + emission, 3)
                 total += emission
@@ -63,7 +74,7 @@ class InsightComposer:
     # ------------------------------------------------------------------
     # EcoScore
     # ------------------------------------------------------------------
-    def eco_score(self, history: list) -> dict:
+    def eco_score(self, history: list[dict[str, Any]]) -> dict[str, Any]:
         """Score 0–100: lower-than-baseline days and streaks raise it.
 
         Score = 60 baseline-relative + up to 25 streak bonus + up to 15
@@ -71,15 +82,20 @@ class InsightComposer:
         starts at 50 (neutral awareness point).
         """
         if not history:
-            return {"score": 50, "streak_days": 0, "explanation": "Start tracking to grow your score."}
+            return {
+                "score": NEW_SESSION_SCORE,
+                "streak_days": 0,
+                "explanation": "Start tracking to grow your score.",
+            }
         daily_totals = self._daily_totals(history)
         days = sorted(daily_totals)
         below_baseline = sum(1 for day in days if daily_totals[day] <= DAILY_BASELINE_KG)
-        baseline_component = 60 * (below_baseline / len(days))
+        baseline_component = BASELINE_WEIGHT * (below_baseline / len(days))
         streak = self._current_streak(days, daily_totals)
-        streak_component = min(streak * 5, 25)
-        consistency_component = min(len(days) * 3, 15)
-        score = int(round(min(baseline_component + streak_component + consistency_component, ECO_SCORE_MAX)))
+        streak_component = min(streak * STREAK_BONUS_PER_DAY, STREAK_BONUS_CAP)
+        consistency_component = min(len(days) * CONSISTENCY_BONUS_PER_DAY, CONSISTENCY_BONUS_CAP)
+        raw_score = baseline_component + streak_component + consistency_component
+        score = int(round(min(raw_score, ECO_SCORE_MAX)))
         return {
             "score": max(score, 0),
             "streak_days": streak,
@@ -89,14 +105,14 @@ class InsightComposer:
             ),
         }
 
-    def _daily_totals(self, history: list) -> dict:
-        totals = {}
+    def _daily_totals(self, history: list[dict[str, Any]]) -> dict[str, float]:
+        totals: dict[str, float] = {}
         for record in history:
             day = str(record.get("recorded_at", ""))[:10] or self._today()
             totals[day] = round(totals.get(day, 0.0) + float(record.get("total_kg_co2e", 0.0)), 3)
         return totals
 
-    def _current_streak(self, sorted_days: list, daily_totals: dict) -> int:
+    def _current_streak(self, sorted_days: list[str], daily_totals: dict[str, float]) -> int:
         streak = 0
         for day in reversed(sorted_days):
             if daily_totals[day] <= DAILY_BASELINE_KG:
@@ -112,9 +128,11 @@ class InsightComposer:
     # ------------------------------------------------------------------
     # Reduction actions
     # ------------------------------------------------------------------
-    def rank_reduction_actions(self, summary: FootprintSummary, limit: int = 3) -> list:
+    def rank_reduction_actions(
+        self, summary: FootprintSummary, limit: int = 3
+    ) -> list[ReductionAction]:
         """Rank swaps by projected saving against THIS user's mix."""
-        actions = []
+        actions: list[ReductionAction] = []
         weekly_factor = 7 / max(summary.record_count, 1)
         for category, category_kg in summary.category_totals.items():
             weekly_kg = category_kg * weekly_factor
@@ -136,7 +154,7 @@ class InsightComposer:
     # ------------------------------------------------------------------
     # What-if simulation
     # ------------------------------------------------------------------
-    def simulate(self, summary: FootprintSummary, scenario: str) -> dict:
+    def simulate(self, summary: FootprintSummary, scenario: str) -> dict[str, Any]:
         """Project weekly footprint under a described behaviour change.
 
         Scenario matching is keyword-based and deterministic so the
@@ -147,16 +165,26 @@ class InsightComposer:
         lowered = (scenario or "").lower()
         matched_category, ratio = None, 0.0
         keyword_map = (
-            (("metro", "bus", "cycle", "walk", "carpool", "commute"), ActivityCategory.TRANSPORT.value, 0.5),
+            (
+                ("metro", "bus", "cycle", "walk", "carpool", "commute"),
+                ActivityCategory.TRANSPORT.value,
+                0.5,
+            ),
             (("veg", "vegan", "meat", "diet"), ActivityCategory.FOOD.value, 0.45),
-            (("ac", "air condition", "electricity", "solar", "led"), ActivityCategory.ENERGY.value, 0.25),
+            (
+                ("ac", "air condition", "electricity", "solar", "led"),
+                ActivityCategory.ENERGY.value,
+                0.25,
+            ),
             (("shopping", "clothes", "parcel", "order"), ActivityCategory.SHOPPING.value, 0.3),
         )
         for keywords, category, candidate_ratio in keyword_map:
             if any(word in lowered for word in keywords):
                 matched_category, ratio = category, candidate_ratio
                 break
-        category_weekly = round(summary.category_totals.get(matched_category, 0.0) * weekly_factor, 2)
+        category_weekly = round(
+            summary.category_totals.get(matched_category, 0.0) * weekly_factor, 2
+        )
         saving = round(category_weekly * ratio, 2)
         return {
             "scenario": scenario,
@@ -170,17 +198,19 @@ class InsightComposer:
     # ------------------------------------------------------------------
     # Weekly trend — server-rendered SVG (deterministic, quota-free)
     # ------------------------------------------------------------------
-    def weekly_trend_svg(self, history: list) -> str:
+    def weekly_trend_svg(self, history: list[dict[str, Any]]) -> str:
         """Render the last 7 tracked days as an accessible inline SVG."""
+        # pylint: disable=too-many-locals
         daily_totals = self._daily_totals(history)
         days = sorted(daily_totals)[-7:]
         values = [daily_totals[d] for d in days] or [0.0]
         width, height, pad = 560, 180, 28
-        peak = max(max(values), DAILY_BASELINE_KG) or 1.0
+        max_val = max(values) if values else 0.0
+        peak = max(max_val, DAILY_BASELINE_KG) or 1.0
         bar_zone = width - 2 * pad
         bar_width = bar_zone / max(len(values), 1)
         baseline_y = height - pad - (DAILY_BASELINE_KG / peak) * (height - 2 * pad)
-        bars = []
+        bars: list[str] = []
         for index, value in enumerate(values):
             bar_height = (value / peak) * (height - 2 * pad)
             x = pad + index * bar_width + 4
@@ -194,7 +224,8 @@ class InsightComposer:
             )
         return (
             f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" '
-            f'role="img" aria-label="Daily carbon footprint for the last {len(values)} tracked days">'
+            f'role="img" aria-label="Daily carbon footprint for the '
+            f'last {len(values)} tracked days">'
             f'<line x1="{pad}" y1="{baseline_y:.1f}" x2="{width - pad}" y2="{baseline_y:.1f}" '
             f'stroke="#666" stroke-dasharray="6 4"/>' + "".join(bars) + "</svg>"
         )

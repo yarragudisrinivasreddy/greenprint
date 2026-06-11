@@ -5,6 +5,10 @@ through the app factory's `services` parameter — tests run offline, fast
 and credential-free while exercising the real routes, registry, insight
 composer and cache.
 """
+from __future__ import annotations
+
+from typing import Any
+
 import pytest
 
 from app import ServiceContainer, create_app
@@ -17,51 +21,51 @@ from app.models.activity import ActivityItem
 class FakeEngine:
     """Deterministic stand-in for CarbonIntelligenceEngine."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.healthy = True
 
-    def interpret_activity(self, text):
+    def interpret_activity(self, text: str) -> list[ActivityItem]:
         return [ActivityItem(factor_key="transport.car_petrol_km", quantity=10.0, note="fake", confidence=0.9)]
 
-    def draft_eco_tip(self, estimates, total_kg):
+    def draft_eco_tip(self, estimates: list[Any], total_kg: float) -> str:
         return "Swap one car trip for the metro this week."
 
-    def draft_simulation_narrative(self, scenario, saving_kg):
+    def draft_simulation_narrative(self, scenario: str, saving_kg: float) -> str:
         return f"Saving {saving_kg} kgCO2e weekly is a great start."
 
-    def is_healthy(self):
+    def is_healthy(self) -> bool:
         return self.healthy
 
 
 class FakeLedger:
     """In-memory ledger mirroring FootprintLedger's contract."""
 
-    def __init__(self):
-        self.records = {}
+    def __init__(self) -> None:
+        self.records: dict[str, list[dict[str, Any]]] = {}
         self.healthy = True
 
-    def append_record(self, record):
+    def append_record(self, record: Any) -> None:
         self.records.setdefault(record.session_id, []).append(record.to_dict())
 
-    def session_history(self, session_id):
+    def session_history(self, session_id: str) -> list[dict[str, Any]]:
         return list(reversed(self.records.get(session_id, [])))
 
-    def is_healthy(self):
+    def is_healthy(self) -> bool:
         return self.healthy
 
 
 class FakeTranslator:
     """Marks translated strings so tests can assert full-response coverage."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.healthy = True
 
-    def translate_response(self, payload, target_language):
+    def translate_response(self, payload: dict[str, Any], target_language: str) -> dict[str, Any]:
         if (target_language or "en") == "en":
             return payload
         return self._mark(payload)
 
-    def _mark(self, obj):
+    def _mark(self, obj: Any) -> Any:
         if isinstance(obj, str):
             return f"[hi]{obj}"
         if isinstance(obj, dict):
@@ -74,40 +78,40 @@ class FakeTranslator:
             return [self._mark(item) for item in obj]
         return obj
 
-    def is_healthy(self):
+    def is_healthy(self) -> bool:
         return self.healthy
 
 
 class FakeVault:
-    def __init__(self):
-        self.archived = []
+    def __init__(self) -> None:
+        self.archived: list[tuple[str, dict[str, Any]]] = []
 
-    def archive_summary(self, session_id, summary):
+    def archive_summary(self, session_id: str, summary: dict[str, Any]) -> bool:
         self.archived.append((session_id, summary))
         return True
 
-    def is_healthy(self):
+    def is_healthy(self) -> bool:
         return True
 
 
 class FakeSecrets:
-    def get_secret(self, name, default=""):
+    def get_secret(self, name: str, default: str = "") -> str:
         return default
 
-    def is_healthy(self):
+    def is_healthy(self) -> bool:
         return True
 
 
 class FakeSentiment:
-    def gauge_motivation(self, text):
+    def gauge_motivation(self, text: str) -> dict[str, Any]:
         return {"score": 0.0, "tone": "neutral"}
 
-    def is_healthy(self):
+    def is_healthy(self) -> bool:
         return True
 
 
 @pytest.fixture()
-def services():
+def services() -> ServiceContainer:
     return ServiceContainer(
         registry=EmissionFactorRegistry(),
         engine=FakeEngine(),
@@ -122,12 +126,12 @@ def services():
 
 
 @pytest.fixture()
-def app(services):
+def app(services: ServiceContainer) -> Any:
     flask_app = create_app(services=services)
     flask_app.config["TESTING"] = True
     return flask_app
 
 
 @pytest.fixture()
-def client(app):
+def client(app: Any) -> Any:
     return app.test_client()

@@ -4,19 +4,23 @@ The /health contract reports per-service readiness so automated
 evaluators and Cloud Run probes can verify every backing Google service
 in one call.
 """
+from __future__ import annotations
+
+from typing import Any
+
 from flask import Blueprint, current_app, jsonify, render_template
 
 health_bp = Blueprint("health", __name__)
 
 
 @health_bp.route("/")
-def home():
+def home() -> str:
     """Serve the accessible single-page tracking interface."""
     return render_template("index.html")
 
 
 @health_bp.route("/health")
-def health():
+def health() -> Any:
     """Per-service readiness report; degraded services are named."""
     services = current_app.extensions["greenprint_services"]
     report = {

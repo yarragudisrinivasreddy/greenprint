@@ -1,3 +1,4 @@
+# pylint: disable=duplicate-code
 """CarbonIntelligenceEngine — GreenPrint's activity interpreter.
 
 Role in the product: convert a user's plain-language description of
@@ -10,9 +11,15 @@ Resilience: if Vertex AI is unavailable or quota-exhausted during
 evaluation, a deterministic keyword parser produces a best-effort
 interpretation so the platform never returns an empty result.
 """
+from __future__ import annotations
+
 import json
 import re
+from typing import TYPE_CHECKING
 
+import google.api_core.exceptions
+import google.auth
+import google.auth.exceptions
 import vertexai
 from google.cloud import aiplatform
 from vertexai.generative_models import GenerativeModel
@@ -20,6 +27,11 @@ from vertexai.generative_models import GenerativeModel
 from app.exceptions import EstimationError
 from app.logging_config import get_logger
 from app.models.activity import ActivityItem
+
+if TYPE_CHECKING:
+    from app.config import Config
+    from app.services.emission_registry import EmissionFactorRegistry
+    from app.models.activity import EmissionEstimate
 
 logger = get_logger(__name__)
 
@@ -63,41 +75,64 @@ _FALLBACK_RULES = (
     (r"(parcel|amazon|flipkart)", "shopping.parcel_delivery", 1.0),
 )
 
-_QUANTITY_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*(km|kilometer|kilometre|kwh|hour|hrs?|meal|item)", re.IGNORECASE)
+_QUANTITY_PATTERN = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(km|kilometer|kilometre|kwh|hour|hrs?|meal|item)",
+    re.IGNORECASE,
+)
+
+UPSTREAM_FAILURES = (
+    google.api_core.exceptions.GoogleAPIError,
+    google.auth.exceptions.GoogleAuthError,
+    OSError,
+    ValueError,
+    json.JSONDecodeError,
+)
+
+INTERPRET_FAILURES = UPSTREAM_FAILURES + (EstimationError,)
 
 
 class CarbonIntelligenceEngine:
     """Gemini-backed interpreter with a deterministic safety net."""
 
-    def __init__(self, config, registry):
+    def __init__(self, config: Config, registry: EmissionFactorRegistry) -> None:
         self._config = config
         self._registry = registry
-        self._model = None
+        self._model: GenerativeModel | None = None
         self._initialized = False
 
     def _ensure_model(self) -> GenerativeModel:
         """Initialise Vertex AI lazily — once per process, never per request."""
         if not self._initialized:
-            vertexai.init(project=self._config.project_id, location=self._config.location)
-            aiplatform.init(project=self._config.project_id, location=self._config.location)
+            project = self._config.project_id
+            if project == "greenprint-local":
+                try:
+                    _, resolved_project = google.auth.default()
+                    if resolved_project:
+                        project = resolved_project
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+            proj_arg = None if project == "greenprint-local" else project
+            vertexai.init(project=proj_arg, location=self._config.location)
+            aiplatform.init(project=proj_arg, location=self._config.location)
             self._model = GenerativeModel(self._config.gemini_model_name)
             self._initialized = True
+        assert self._model is not None
         return self._model
 
     # ------------------------------------------------------------------
     # Activity interpretation
     # ------------------------------------------------------------------
-    def interpret_activity(self, text: str) -> list:
+    def interpret_activity(self, text: str) -> list[ActivityItem]:
         """Interpret free text into ActivityItems (Gemini, then fallback)."""
         if not text or not text.strip():
             raise EstimationError("No activity description provided.")
         try:
             return self._interpret_with_gemini(text)
-        except Exception as exc:  # Vertex outage/quota must never empty a response.
-            logger.warning("Gemini interpretation unavailable (%s); using heuristic parser.", exc)
+        except INTERPRET_FAILURES as exc:
+            logger.warning("Gemini interpretation unavailable (%s); using heuristic.", exc)
             return self._heuristic_parse(text)
 
-    def _interpret_with_gemini(self, text: str) -> list:
+    def _interpret_with_gemini(self, text: str) -> list[ActivityItem]:
         catalog = "\n".join(
             f"- {key} (unit: {meta['unit']}, {meta['label']})"
             for key, meta in self._registry.factor_catalog().items()
@@ -106,7 +141,7 @@ class CarbonIntelligenceEngine:
         response = self._ensure_model().generate_content(prompt)
         return self._parse_model_json(response.text)
 
-    def _parse_model_json(self, raw: str) -> list:
+    def _parse_model_json(self, raw: str) -> list[ActivityItem]:
         """Extract the JSON array from a model response, tolerating fences."""
         cleaned = raw.strip()
         cleaned = re.sub(r"^```(?:json)?|```$", "", cleaned, flags=re.MULTILINE).strip()
@@ -133,7 +168,7 @@ class CarbonIntelligenceEngine:
             raise EstimationError("Model produced no usable activities.")
         return items
 
-    def _heuristic_parse(self, text: str) -> list:
+    def _heuristic_parse(self, text: str) -> list[ActivityItem]:
         """Deterministic keyword interpretation used when Gemini is down."""
         lowered = text.lower()
         quantity_match = _QUANTITY_PATTERN.search(lowered)
@@ -146,16 +181,21 @@ class CarbonIntelligenceEngine:
                 if stated_quantity is not None and not used_stated:
                     quantity, used_stated = stated_quantity, True
                 items.append(
-                    ActivityItem(factor_key=factor_key, quantity=quantity, note="heuristic match", confidence=0.5)
+                    ActivityItem(
+                        factor_key=factor_key,
+                        quantity=quantity,
+                        note="heuristic match",
+                        confidence=0.5,
+                    )
                 )
         if not items:
-            raise EstimationError("Could not recognise any trackable activity in the description.")
+            raise EstimationError("Could not recognise any trackable activity.")
         return items
 
     # ------------------------------------------------------------------
     # Narrative generation (tips + simulations)
     # ------------------------------------------------------------------
-    def draft_eco_tip(self, estimates: list, total_kg: float) -> str:
+    def draft_eco_tip(self, estimates: list[EmissionEstimate], total_kg: float) -> str:
         """One personalised, actionable tip for this tracking event."""
         try:
             top = max(estimates, key=lambda e: e.emission_kg_co2e)
@@ -166,10 +206,10 @@ class CarbonIntelligenceEngine:
                 "No preamble, plain text."
             )
             return self._ensure_model().generate_content(prompt).text.strip()
-        except Exception:
+        except UPSTREAM_FAILURES:
             return self._fallback_tip(estimates)
 
-    def _fallback_tip(self, estimates: list) -> str:
+    def _fallback_tip(self, estimates: list[EmissionEstimate]) -> str:
         if not estimates:
             return "Log one activity a day — awareness is the first reduction."
         top = max(estimates, key=lambda e: e.emission_kg_co2e)
@@ -189,7 +229,7 @@ class CarbonIntelligenceEngine:
                 f"would save {saving_kg} kgCO2e per week. Plain text, no preamble."
             )
             return self._ensure_model().generate_content(prompt).text.strip()
-        except Exception:
+        except UPSTREAM_FAILURES:
             return (
                 f"This change saves about {saving_kg} kgCO2e every week — "
                 f"roughly {round(saving_kg * 52, 1)} kg a year. Worth starting today."
@@ -200,5 +240,6 @@ class CarbonIntelligenceEngine:
         try:
             self._ensure_model()
             return True
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Resilience boundary: health probe must never crash the service.
             return False

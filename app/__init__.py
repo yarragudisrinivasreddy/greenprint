@@ -1,10 +1,14 @@
+# pylint: disable=import-outside-toplevel,too-many-instance-attributes
 """GreenPrint application factory.
 
 `create_app()` wires configuration, logging, security headers, rate
 limiting and the domain service container, then registers Blueprints.
 Tests construct apps with injected fakes via the same factory.
 """
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from flask import Flask, jsonify
 from flask_limiter import Limiter
@@ -15,6 +19,18 @@ from app.exceptions import GreenPrintError
 from app.logging_config import configure_logging, get_logger
 from app.security import register_security
 
+if TYPE_CHECKING:
+    from app.config import Config
+    from app.services.archive_vault import ArchiveVault
+    from app.services.carbon_engine import CarbonIntelligenceEngine
+    from app.services.emission_registry import EmissionFactorRegistry
+    from app.services.footprint_ledger import FootprintLedger
+    from app.services.insight_cache import InsightCache
+    from app.services.insight_composer import InsightComposer
+    from app.services.secret_vault import SecretVault
+    from app.services.sentiment_lens import SentimentLens
+    from app.services.translator import ResponseTranslator
+
 logger = get_logger(__name__)
 
 
@@ -22,18 +38,18 @@ logger = get_logger(__name__)
 class ServiceContainer:
     """All domain services GreenPrint routes depend on."""
 
-    registry: object
-    engine: object
-    composer: object
-    ledger: object
-    translator: object
-    vault: object
-    secrets: object
-    sentiment: object
-    cache: object
+    registry: EmissionFactorRegistry
+    engine: CarbonIntelligenceEngine
+    composer: InsightComposer
+    ledger: FootprintLedger
+    translator: ResponseTranslator
+    vault: ArchiveVault
+    secrets: SecretVault
+    sentiment: SentimentLens
+    cache: InsightCache
 
 
-def build_services(config) -> ServiceContainer:
+def build_services(config: Config) -> ServiceContainer:
     """Construct the production service graph (lazy Google clients)."""
     from app.services.archive_vault import ArchiveVault
     from app.services.carbon_engine import CarbonIntelligenceEngine
@@ -87,15 +103,16 @@ def create_app(services: ServiceContainer | None = None) -> Flask:
     app.register_blueprint(health_bp)
 
     @app.errorhandler(GreenPrintError)
-    def handle_domain_error(error: GreenPrintError):
+    def handle_domain_error(error: GreenPrintError) -> Any:
+        logger.warning("Domain error: %s", error)
         return jsonify({"status": "error", "message": error.public_message}), error.status_code
 
     @app.errorhandler(404)
-    def handle_not_found(_):
+    def handle_not_found(_: Any) -> Any:
         return jsonify({"status": "error", "message": "Resource not found."}), 404
 
     @app.errorhandler(413)
-    def handle_too_large(_):
+    def handle_too_large(_: Any) -> Any:
         return jsonify({"status": "error", "message": "Request payload too large."}), 413
 
     logger.info("GreenPrint application initialised.")

@@ -4,6 +4,8 @@ Centralising category names, language codes and unit symbols removes
 magic strings from services and keeps the translation exclusion set in
 one auditable place.
 """
+from __future__ import annotations
+
 from enum import Enum
 
 
@@ -16,16 +18,16 @@ class ActivityCategory(str, Enum):
     SHOPPING = "shopping"
 
 
-SUPPORTED_LANGUAGES = ("en", "hi", "te", "ta", "kn", "bn", "mr")
-DEFAULT_LANGUAGE = "en"
+SUPPORTED_LANGUAGES: tuple[str, ...] = ("en", "hi", "te", "ta", "kn", "bn", "mr")
+DEFAULT_LANGUAGE: str = "en"
 
 # Strings that must never be translated: unit symbols lose scientific
 # meaning and hashtags lose platform function in non-Latin scripts.
-UNIT_SYMBOLS = ("kgCO2e", "kgCO₂e", "kWh", "km", "kg")
-PROTECTED_PREFIXES = ("#",)
+UNIT_SYMBOLS: tuple[str, ...] = ("kgCO2e", "kgCO₂e", "kWh", "km", "kg")
+PROTECTED_PREFIXES: tuple[str, ...] = ("#",)
 
 # JSON keys whose values are machine-readable identifiers, never prose.
-NON_TRANSLATABLE_KEYS = frozenset(
+NON_TRANSLATABLE_KEYS: frozenset[str] = frozenset(
     {
         "factor_key",
         "category",
@@ -37,4 +39,4 @@ NON_TRANSLATABLE_KEYS = frozenset(
     }
 )
 
-ECO_SCORE_MAX = 100
+ECO_SCORE_MAX: int = 100

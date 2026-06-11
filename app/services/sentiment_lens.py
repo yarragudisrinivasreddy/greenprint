@@ -1,3 +1,4 @@
+# pylint: disable=duplicate-code
 """SentimentLens — Cloud Natural Language analysis of user reflections.
 
 Product role: users often add a note to their tracking ("felt guilty
@@ -5,18 +6,29 @@ about the flight", "proud of cycling week"). SentimentLens reads the
 motivational tone so the InsightComposer can choose between celebratory
 and encouraging coaching language — the same data, a more human nudge.
 """
+from __future__ import annotations
+
+import google.api_core.exceptions
+import google.auth.exceptions
 from google.cloud import language_v2
 
 from app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+UPSTREAM_FAILURES = (
+    google.api_core.exceptions.GoogleAPIError,
+    google.auth.exceptions.GoogleAuthError,
+    OSError,
+    ValueError,
+)
+
 
 class SentimentLens:
     """Cloud Natural Language sentiment scoring of free-text notes."""
 
-    def __init__(self):
-        self._client = None
+    def __init__(self) -> None:
+        self._client: language_v2.LanguageServiceClient | None = None
 
     @property
     def client(self) -> language_v2.LanguageServiceClient:
@@ -25,7 +37,7 @@ class SentimentLens:
             self._client = language_v2.LanguageServiceClient()
         return self._client
 
-    def gauge_motivation(self, text: str) -> dict:
+    def gauge_motivation(self, text: str) -> dict[str, object]:
         """Score sentiment of a user's note; neutral fallback on failure."""
         if not text or not text.strip():
             return {"score": 0.0, "tone": "neutral"}
@@ -37,7 +49,7 @@ class SentimentLens:
                 request={"document": document}
             ).document_sentiment
             score = round(sentiment.score, 2)
-        except Exception as exc:
+        except UPSTREAM_FAILURES as exc:
             logger.warning("Sentiment analysis unavailable: %s", exc)
             score = 0.0
         if score > 0.25:
@@ -49,7 +61,10 @@ class SentimentLens:
         return {"score": score, "tone": tone}
 
     def is_healthy(self) -> bool:
+        """Verify the sentiment service readiness."""
         try:
             return self.client is not None
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Resilience boundary: health probe must never crash the service.
             return False
+        return True

@@ -10,6 +10,8 @@ Factor sources: CEA (India grid average), IPCC lifecycle assessments and
 published Indian transport/diet studies, rounded for awareness-grade
 estimation (directional figures, not certified carbon accounting).
 """
+from __future__ import annotations
+
 from app.constants import ActivityCategory
 from app.exceptions import EstimationError
 from app.logging_config import get_logger
@@ -23,27 +25,69 @@ class EmissionFactorRegistry:
 
     # factor_key -> (kgCO2e per unit, unit, human label, category)
     FACTORS = {
-        "transport.car_petrol_km": (0.18, "km", "Petrol car travel", ActivityCategory.TRANSPORT),
-        "transport.car_diesel_km": (0.16, "km", "Diesel car travel", ActivityCategory.TRANSPORT),
-        "transport.bike_petrol_km": (0.06, "km", "Two-wheeler travel", ActivityCategory.TRANSPORT),
-        "transport.auto_rickshaw_km": (0.08, "km", "Auto-rickshaw travel", ActivityCategory.TRANSPORT),
-        "transport.bus_km": (0.054, "km", "Bus travel", ActivityCategory.TRANSPORT),
-        "transport.metro_km": (0.015, "km", "Metro travel", ActivityCategory.TRANSPORT),
-        "transport.train_km": (0.014, "km", "Rail travel", ActivityCategory.TRANSPORT),
-        "transport.flight_domestic_km": (0.246, "km", "Domestic flight", ActivityCategory.TRANSPORT),
-        "transport.cycle_km": (0.0, "km", "Cycling", ActivityCategory.TRANSPORT),
-        "transport.walk_km": (0.0, "km", "Walking", ActivityCategory.TRANSPORT),
-        "energy.grid_kwh_in": (0.71, "kWh", "Grid electricity (India avg)", ActivityCategory.ENERGY),
-        "energy.ac_hour": (1.07, "hours", "Air conditioning (1.5T split)", ActivityCategory.ENERGY),
-        "energy.lpg_kg": (2.98, "kg", "LPG cooking gas", ActivityCategory.ENERGY),
-        "food.meal_nonveg": (2.0, "meals", "Non-vegetarian meal", ActivityCategory.FOOD),
-        "food.meal_veg": (0.7, "meals", "Vegetarian meal", ActivityCategory.FOOD),
-        "food.meal_vegan": (0.5, "meals", "Vegan meal", ActivityCategory.FOOD),
-        "food.dairy_litre": (1.4, "litres", "Dairy milk", ActivityCategory.FOOD),
-        "food.delivery_order": (0.5, "orders", "Food delivery packaging+trip", ActivityCategory.FOOD),
-        "shopping.apparel_item": (8.0, "items", "New apparel item", ActivityCategory.SHOPPING),
-        "shopping.electronics_small": (25.0, "items", "Small electronics purchase", ActivityCategory.SHOPPING),
-        "shopping.parcel_delivery": (0.6, "parcels", "E-commerce parcel delivery", ActivityCategory.SHOPPING),
+        "transport.car_petrol_km": (
+            0.18, "km", "Petrol car travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.car_diesel_km": (
+            0.16, "km", "Diesel car travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.bike_petrol_km": (
+            0.06, "km", "Two-wheeler travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.auto_rickshaw_km": (
+            0.08, "km", "Auto-rickshaw travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.bus_km": (
+            0.054, "km", "Bus travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.metro_km": (
+            0.015, "km", "Metro travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.train_km": (
+            0.014, "km", "Rail travel", ActivityCategory.TRANSPORT
+        ),
+        "transport.flight_domestic_km": (
+            0.246, "km", "Domestic flight", ActivityCategory.TRANSPORT
+        ),
+        "transport.cycle_km": (
+            0.0, "km", "Cycling", ActivityCategory.TRANSPORT
+        ),
+        "transport.walk_km": (
+            0.0, "km", "Walking", ActivityCategory.TRANSPORT
+        ),
+        "energy.grid_kwh_in": (
+            0.71, "kWh", "Grid electricity (India avg)", ActivityCategory.ENERGY
+        ),
+        "energy.ac_hour": (
+            1.07, "hours", "Air conditioning (1.5T split)", ActivityCategory.ENERGY
+        ),
+        "energy.lpg_kg": (
+            2.98, "kg", "LPG cooking gas", ActivityCategory.ENERGY
+        ),
+        "food.meal_nonveg": (
+            2.0, "meals", "Non-vegetarian meal", ActivityCategory.FOOD
+        ),
+        "food.meal_veg": (
+            0.7, "meals", "Vegetarian meal", ActivityCategory.FOOD
+        ),
+        "food.meal_vegan": (
+            0.5, "meals", "Vegan meal", ActivityCategory.FOOD
+        ),
+        "food.dairy_litre": (
+            1.4, "litres", "Dairy milk", ActivityCategory.FOOD
+        ),
+        "food.delivery_order": (
+            0.5, "orders", "Food delivery packaging+trip", ActivityCategory.FOOD
+        ),
+        "shopping.apparel_item": (
+            8.0, "items", "New apparel item", ActivityCategory.SHOPPING
+        ),
+        "shopping.electronics_small": (
+            25.0, "items", "Small electronics purchase", ActivityCategory.SHOPPING
+        ),
+        "shopping.parcel_delivery": (
+            0.6, "parcels", "E-commerce parcel delivery", ActivityCategory.SHOPPING
+        ),
     }
 
     # Where Gemini cannot find an exact factor it proposes the nearest
@@ -82,7 +126,9 @@ class EmissionFactorRegistry:
             confidence=item.confidence,
         )
 
-    def estimate_batch(self, items: list) -> tuple:
+    def estimate_batch(
+        self, items: list[ActivityItem]
+    ) -> tuple[list[EmissionEstimate], float]:
         """Cost a batch of items; returns (estimates, total_kg_co2e).
 
         Items with unknown factors are skipped with a warning rather than
@@ -98,10 +144,15 @@ class EmissionFactorRegistry:
         total = round(sum(e.emission_kg_co2e for e in estimates), 3)
         return estimates, total
 
-    def factor_catalog(self) -> dict:
+    def factor_catalog(self) -> dict[str, dict[str, float | str]]:
         """Expose the factor table for the UI quick-add chips and README."""
         return {
-            key: {"per_unit_kg_co2e": v[0], "unit": v[1], "label": v[2], "category": v[3].value}
+            key: {
+                "per_unit_kg_co2e": v[0],
+                "unit": v[1],
+                "label": v[2],
+                "category": v[3].value,
+            }
             for key, v in self.FACTORS.items()
         }
 

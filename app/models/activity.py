@@ -4,8 +4,11 @@ An `ActivityItem` is what the intelligence engine extracts from user
 input; an `EmissionEstimate` is the registry's deterministic costing of
 that item; an `ActivityRecord` is the persisted ledger entry.
 """
-from dataclasses import dataclass, field, asdict
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 
 @dataclass
@@ -17,7 +20,8 @@ class ActivityItem:
     note: str = ""
     confidence: float = 1.0  # 1.0 = exact factor match, lower = nearest-factor guess.
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the ActivityItem model to a serialized dictionary."""
         return asdict(self)
 
 
@@ -33,7 +37,8 @@ class EmissionEstimate:
     emission_kg_co2e: float
     confidence: float
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the EmissionEstimate model to a serialized dictionary."""
         return asdict(self)
 
 
@@ -42,14 +47,15 @@ class ActivityRecord:
     """A persisted footprint ledger entry for one tracking request."""
 
     session_id: str
-    estimates: list = field(default_factory=list)
+    estimates: list[EmissionEstimate] = field(default_factory=list)
     total_kg_co2e: float = 0.0
     source_text: str = ""
     recorded_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the ActivityRecord model to a serialized dictionary."""
         return {
             "session_id": self.session_id,
             "estimates": [e.to_dict() if hasattr(e, "to_dict") else e for e in self.estimates],
