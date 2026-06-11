@@ -43,7 +43,7 @@ Flask app-factory (`create_app()`) with Blueprint routing. **Thin routes** (`app
 
 **Efficiency:** TTL+LRU insight cache, `processing_time_ms` in every response, Firestore reads capped at a 50-record window, multi-stage slim image.
 
-**Testing:** 102 tests across 7 test files (8 files total), 87% coverage, all Google clients mocked — `pytest --cov=app`.
+**Testing:** 127 tests across 7 test files (8 files total), 97% coverage, all Google clients mocked — pytest --cov=app
 
 **Accessibility:** skip link, ARIA landmarks and labels, `aria-live` regions, labelled controls, visible focus rings, reduced-motion, forced-colors and dark-mode support; trend SVG carries `role="img"` with a descriptive label.
 
