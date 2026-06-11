@@ -87,7 +87,7 @@ The application architecture is detailed in [docs/ARCHITECTURE.md](docs/ARCHITEC
 
 **TESTING:** 132 tests · 96% coverage · mocked Google clients, CI gates (pytest ≥95% coverage, pylint ≥9.9).
 
-**ATTEMPT 3:** repository pattern (Protocol + Firestore/in-memory implementations), engine split into ActivityInterpreter / NarrativeComposer / VertexGateway, sourced emission factors (CEA, India GHG Platform, IPCC, DEFRA), docs/ARCHITECTURE.md, zero silent exception swallows, complexity all A/B-grade.
+**Recent improvements:** repository pattern (Protocol + Firestore/in-memory implementations), engine split into ActivityInterpreter / NarrativeComposer / VertexGateway, sourced emission factors (CEA, India GHG Platform, IPCC, DEFRA), docs/ARCHITECTURE.md, zero silent exception swallows, complexity all A/B-grade.
 
 **Accessibility:** skip link, ARIA landmarks, `aria-busy` busy-state toggling on results regions, `aria-live` regions, labelled controls, visible focus rings, reduced-motion, forced-colors, and dark-mode support; trend SVG carries `role="img"` with a descriptive label.
 
